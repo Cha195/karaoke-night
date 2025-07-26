@@ -1,12 +1,12 @@
 import {
-  AudioFeatures,
-  AudioFeaturesBatchSchema,
   DifficultyEnumType,
   GameParams,
   SpotifySearchTracksResponse,
   SpotifyTrack,
 } from "~/model/game";
 import spotifyApi from "./spotify";
+import { youtubeApi, RICKROLL_VIDEO_ID } from "./youtube";
+import { getRedis } from "../redis";
 
 export function queryGenerator(params: GameParams): string {
   const queryParts: string[] = [];
@@ -50,7 +50,7 @@ export function queryGenerator(params: GameParams): string {
   return queryParts.filter(Boolean).join(" ");
 }
 
-export const fetchSongs = async (
+export const fetchTracks = async (
   query: string,
   limit: number
 ): Promise<SpotifyTrack[]> => {
@@ -84,24 +84,24 @@ export const fetchSongs = async (
   return collected.slice(0, limit);
 };
 
-export const fetchAudioFeatures = async (
-  tracks: SpotifyTrack[]
-): Promise<AudioFeatures[]> => {
-  const trackIds = tracks.map((track) => track.id).join(",");
-  const response = await spotifyApi.get("/v1/audio-features", {
-    params: {
-      ids: trackIds,
-    },
-  });
+// export const fetchAudioFeatures = async (
+//   tracks: SpotifyTrack[]
+// ): Promise<AudioFeatures[]> => {
+//   const trackIds = tracks.map((track) => track.id).join(",");
+//   const response = await spotifyApi.get("/v1/audio-features", {
+//     params: {
+//       ids: trackIds,
+//     },
+//   });
 
-  const { success, data } = AudioFeaturesBatchSchema.safeParse(response.data);
+//   const { success, data } = AudioFeaturesBatchSchema.safeParse(response.data);
 
-  if (!success || !data) {
-    throw new Error("Error parsing data");
-  }
+//   if (!success || !data) {
+//     throw new Error("Error parsing data");
+//   }
 
-  return data;
-};
+//   return data;
+// };
 
 // export const classifyDifficulty = (
 //   features: AudioFeatures
@@ -136,3 +136,49 @@ export const classifyDifficulty = (track: SpotifyTrack): DifficultyEnumType => {
   if (popularity >= 20) return "Hard";
   return "Very Hard";
 };
+
+export async function fetchVideoLinks(
+  tracks: SpotifyTrack[]
+): Promise<Record<string, string>> {
+  const results: Record<string, string> = {};
+  const redis = getRedis();
+
+  await Promise.all(
+    tracks.map(async (track) => {
+      const cacheKey = `yt:${track.id}`;
+
+      // Check Redis first
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        results[track.id] = cached;
+        return;
+      }
+
+      // Build query for YouTube search
+      const query = `${track.name} ${track.artists[0].name} audio`;
+
+      try {
+        const res = await youtubeApi.get("/search", {
+          params: { q: query },
+        });
+
+        const videoId = res.data.items?.[0]?.id?.videoId || RICKROLL_VIDEO_ID;
+
+        // Cache it in Redis
+        await redis.set(cacheKey, videoId, {
+          EX: 60 * 60 * 24 * 7, // 7 days TTL
+        });
+
+        results[track.id] = videoId;
+      } catch (err) {
+        console.error(`YouTube search failed for ${track.name}:`, err);
+        results[track.id] = RICKROLL_VIDEO_ID;
+        await redis.set(cacheKey, RICKROLL_VIDEO_ID, {
+          EX: 60 * 60 * 24 * 7,
+        });
+      }
+    })
+  );
+
+  return results;
+}
