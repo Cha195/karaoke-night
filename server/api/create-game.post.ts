@@ -35,7 +35,7 @@ export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
       const board = await generateBoard(data);
       await addGamePlayerMap({ gameId: board.gameId, playerId });
 
-      const gameBoardDTO = gameBoardToGameBoardDTO(board, crypto.randomUUID());
+      const gameBoardDTO = gameBoardToGameBoardDTO(board, playerId);
 
       return {
         status: 200,

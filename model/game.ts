@@ -22,6 +22,12 @@ export const StartGameParamsSchema = z.object({
   limit: z.number(),
 });
 
+export const SubmitAnswerParamsSchema = z.object({
+  answer: z.string(),
+  gameId: z.string(),
+  tileId: z.string(),
+});
+
 export const GetGameParamsSchema = z.object({
   gameId: z.string(),
 });

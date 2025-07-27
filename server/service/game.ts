@@ -9,6 +9,7 @@ import {
 } from "~/model/game";
 import { fetchTracks, queryGenerator, fetchVideoLinks } from "./game-provider";
 import { getRedis } from "./redis";
+import fuzzysort from "fuzzysort";
 
 const DifficultyBucket: DifficultyEnum[] = [
   DifficultyEnum["Very Easy"],
@@ -132,7 +133,61 @@ export const addGamePlayerMap = async ({
   return true;
 };
 
-export const updatePlayerGameScore = async ({
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]/g, "") // remove () and [] content
+    .replace(/\b(ft\.|feat\.|featuring)\b/g, "") // remove feat. words
+    .replace(/[-–—]/g, " ") // replace dashes with space
+    .replace(/[^a-z0-9\s]/gi, "") // remove non-alphanumeric
+    .replace(/\s+/g, " ") // collapse multiple spaces
+    .trim();
+}
+
+const matchAnswer = (userAnswer: string, correctTitle: string): boolean => {
+  const cleanUser = normalizeTitle(userAnswer);
+  const cleanCorrect = normalizeTitle(correctTitle);
+
+  const result = fuzzysort.single(cleanUser, cleanCorrect);
+
+  return result !== null && result.score !== undefined && result.score > -50;
+};
+
+export const submitAnswer = async ({
+  gameId,
+  playerId,
+  tileId,
+  answer,
+}: {
+  gameId: string;
+  playerId: string;
+  tileId: string;
+  answer: string;
+}): Promise<{ board: GameBoard; isCorrect: boolean }> => {
+  const redis = getRedis();
+
+  const board = await getGameByGameId(gameId);
+  if (!board) throw new Error("Game does not exist");
+  if (board.state !== GameStatusEnum.InProgress)
+    throw new Error("Game not in progress");
+
+  const tile = board.tiles.find((tile) => tile.tileId === tileId);
+  if (!tile) throw new Error("Wrong tile id");
+  if (tile.answeredBy !== null) throw new Error("Question already answered");
+
+  const correctTitle = tile.title;
+  const isCorrect = matchAnswer(answer, correctTitle);
+  if (isCorrect) {
+    await updatePlayerGameScore({ gameId, playerId, score: tile.points });
+  }
+
+  tile.answeredBy = playerId;
+  await redis.set(gameId, board);
+
+  return { board, isCorrect };
+};
+
+const updatePlayerGameScore = async ({
   gameId,
   playerId,
   score,
