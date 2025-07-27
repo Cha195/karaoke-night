@@ -41,6 +41,7 @@ export const generateBoard = async (
       title: track.name,
       difficulty: DifficultyBucket[Math.floor(index / 5)],
       points: 5 * Math.ceil((index + 1) / 5),
+      answeredBy: null,
     })),
   };
 
@@ -65,6 +66,7 @@ export const gameBoardToGameBoardDTO = (
       difficulty: tile.difficulty,
       points: tile.points,
       previewUrl: tile.previewUrl,
+      answeredBy: tile.answeredBy,
     })),
   };
 };
@@ -145,6 +147,6 @@ export const updatePlayerGameScore = async ({
   if (board.state !== GameStatusEnum.InProgress)
     throw new Error("Game is not in progress");
 
-  await redis.hset(getGamePlayerMapKey(gameId), { [playerId]: score });
+  await redis.hincrby(getGamePlayerMapKey(gameId), playerId, score);
   return true;
 };

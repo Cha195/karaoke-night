@@ -26,20 +26,17 @@ export const GetGameParamsSchema = z.object({
   gameId: z.string(),
 });
 
-export const GameTileSchema = z.object({
-  tileId: z.string(),
-  previewUrl: z.string(),
-  artist: z.string(),
-  title: z.string(),
-  difficulty: z.nativeEnum(DifficultyEnum),
-  points: z.number(),
-});
-
 export const GameTileDTOSchema = z.object({
   tileId: z.string(),
   previewUrl: z.string(),
   difficulty: z.nativeEnum(DifficultyEnum),
   points: z.number(),
+  answeredBy: z.string().nullable(),
+});
+
+export const GameTileSchema = GameTileDTOSchema.extend({
+  artist: z.string(),
+  title: z.string(),
 });
 
 export const GameBoardSchema = z.object({
