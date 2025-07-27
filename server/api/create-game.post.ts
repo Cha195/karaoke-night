@@ -1,12 +1,13 @@
-import { GameParamsSchema, GameBoardDTO } from "~/model/game";
+import { StartGameParamsSchema, GameBoardDTO } from "~/model/game";
 import { ServerResponseType } from "../models/api";
-import { generateBoard } from "../service/game";
+import { gameBoardToGameBoardDTO, generateBoard } from "../service/game";
+import { getRedis } from "../service/redis";
 
 export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
   async (event) => {
     try {
       const { success, data, error } = await readValidatedBody(event, (body) =>
-        GameParamsSchema.safeParse(body)
+        StartGameParamsSchema.safeParse(body)
       );
 
       if (!success) {
@@ -19,15 +20,13 @@ export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
       }
 
       const board = await generateBoard(data);
+      const gameBoardDTO = gameBoardToGameBoardDTO(board, crypto.randomUUID());
 
-      console.log("board", board);
-
-      // Return a mock GameBoard object
       return {
         status: 200,
         success: true,
         message: "Successfully generated Game board",
-        data: { playerId: crypto.randomUUID(), ...board },
+        data: gameBoardDTO,
       };
     } catch (err) {
       return {

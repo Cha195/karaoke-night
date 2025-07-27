@@ -1,14 +1,14 @@
 import {
-  DifficultyEnumType,
-  GameParams,
+  StartGameParams,
   SpotifySearchTracksResponse,
   SpotifyTrack,
+  DifficultyEnum,
 } from "~/model/game";
 import spotifyApi from "./spotify";
 import { youtubeApi, RICKROLL_VIDEO_ID } from "./youtube";
 import { getRedis } from "../redis";
 
-export function queryGenerator(params: GameParams): string {
+export function queryGenerator(params: StartGameParams): string {
   const queryParts: string[] = [];
 
   if (params.artists && params.artists.length > 0) {
@@ -128,13 +128,13 @@ export const fetchTracks = async (
 //   };
 // };
 
-export const classifyDifficulty = (track: SpotifyTrack): DifficultyEnumType => {
+export const classifyDifficulty = (track: SpotifyTrack): DifficultyEnum => {
   const { popularity } = track;
-  if (popularity >= 90) return "Very Easy";
-  if (popularity >= 70) return "Easy";
-  if (popularity >= 40) return "Medium";
-  if (popularity >= 20) return "Hard";
-  return "Very Hard";
+  if (popularity >= 90) return DifficultyEnum["Very Easy"];
+  if (popularity >= 70) return DifficultyEnum["Easy"];
+  if (popularity >= 40) return DifficultyEnum["Medium"];
+  if (popularity >= 20) return DifficultyEnum["Hard"];
+  return DifficultyEnum["Very Hard"];
 };
 
 export async function fetchVideoLinks(
@@ -148,7 +148,7 @@ export async function fetchVideoLinks(
       const cacheKey = `yt:${track.id}`;
 
       // Check Redis first
-      const cached = await redis.get(cacheKey);
+      const cached = await redis.get<string>(cacheKey);
       if (cached) {
         results[track.id] = cached;
         return;
@@ -166,7 +166,7 @@ export async function fetchVideoLinks(
 
         // Cache it in Redis
         await redis.set(cacheKey, videoId, {
-          EX: 60 * 60 * 24 * 7, // 7 days TTL
+          ex: 60 * 60 * 24 * 7, // 7 days TTL
         });
 
         results[track.id] = videoId;
@@ -174,7 +174,7 @@ export async function fetchVideoLinks(
         console.error(`YouTube search failed for ${track.name}:`, err);
         results[track.id] = RICKROLL_VIDEO_ID;
         await redis.set(cacheKey, RICKROLL_VIDEO_ID, {
-          EX: 60 * 60 * 24 * 7,
+          ex: 60 * 60 * 24 * 7,
         });
       }
     })

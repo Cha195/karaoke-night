@@ -1,14 +1,20 @@
 import { z } from "zod";
 
-export const DifficultyEnum = z.enum([
+export enum GameStatusEnum {
+  Unstarted = "Unstarted",
+  InProgress = "In-Progress",
+  Ended = "Ended",
+}
+
+export enum DifficultyEnum {
   "Very Easy",
   "Easy",
   "Medium",
   "Hard",
   "Very Hard",
-]);
+}
 
-export const GameParamsSchema = z.object({
+export const StartGameParamsSchema = z.object({
   artists: z.array(z.string()).optional(),
   genres: z.array(z.string()).optional(),
   decades: z.array(z.string()).optional(),
@@ -16,33 +22,37 @@ export const GameParamsSchema = z.object({
   limit: z.number(),
 });
 
+export const GetGameParamsSchema = z.object({
+  gameId: z.string(),
+});
+
 export const GameTileSchema = z.object({
   tileId: z.string(),
-  previewUrl: z.string().url(),
+  previewUrl: z.string(),
   artist: z.string(),
-  title: z.string().optional(),
-  difficulty: DifficultyEnum.optional(),
-  column: z.string().optional(),
-  points: z.number().optional(),
+  title: z.string(),
+  difficulty: z.nativeEnum(DifficultyEnum),
+  points: z.number(),
 });
 
 export const GameTileDTOSchema = z.object({
   tileId: z.string(),
-  previewUrl: z.string().url(),
-  difficulty: DifficultyEnum.optional(),
-  column: z.string().optional(),
-  points: z.number().optional(),
+  previewUrl: z.string(),
+  difficulty: z.nativeEnum(DifficultyEnum),
+  points: z.number(),
 });
 
 export const GameBoardSchema = z.object({
   gameId: z.string().uuidv4(),
   tiles: z.array(GameTileSchema),
+  state: z.nativeEnum(GameStatusEnum),
 });
 
 export const GameBoardDTOSchema = z.object({
   gameId: z.string().uuid(),
   playerId: z.string().uuid(),
   tiles: z.array(GameTileDTOSchema),
+  state: z.nativeEnum(GameStatusEnum),
 });
 
 export const AudioFeaturesSchema = z.object({
@@ -69,15 +79,14 @@ export const AudioFeaturesSchema = z.object({
 export const AudioFeaturesBatchSchema = z.array(AudioFeaturesSchema);
 
 export const AudioFeaturesWithDifficultySchema = AudioFeaturesSchema.extend({
-  difficulty: DifficultyEnum,
+  difficulty: z.nativeEnum(DifficultyEnum),
 });
 
 // Infer types
-export type GameParams = z.infer<typeof GameParamsSchema>;
+export type StartGameParams = z.infer<typeof StartGameParamsSchema>;
 export type GameTileDTO = z.infer<typeof GameTileDTOSchema>;
 export type GameBoardDTO = z.infer<typeof GameBoardDTOSchema>;
 export type GameBoard = z.infer<typeof GameBoardSchema>;
-export type DifficultyEnumType = z.infer<typeof DifficultyEnum>;
 
 export type AudioFeatures = z.infer<typeof AudioFeaturesSchema>;
 export type AudioFeaturesWithDifficulty = z.infer<
