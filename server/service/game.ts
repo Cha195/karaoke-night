@@ -18,6 +18,8 @@ const DifficultyBucket: DifficultyEnum[] = [
   DifficultyEnum["Very Hard"],
 ];
 
+const getGamePlayerMapKey = (gameId: string) => `game:${gameId}:players`;
+
 export const generateBoard = async (
   params: StartGameParams
 ): Promise<GameBoard> => {
@@ -94,5 +96,55 @@ export const startGameByGameId = async (gameId: string): Promise<boolean> => {
 
 export const deleteGameByGameId = async (gameId: string): Promise<void> => {
   const redis = getRedis();
-  redis.del(gameId);
+  await redis.del(gameId);
+  await redis.del(getGamePlayerMapKey(gameId));
+};
+
+export const addGamePlayerMap = async ({
+  gameId,
+  playerId,
+}: {
+  gameId: string;
+  playerId: string;
+}): Promise<boolean> => {
+  const redis = getRedis();
+  const board = await getGameByGameId(gameId);
+  if (!board) throw new Error("Game does not exist");
+  if (board.state !== GameStatusEnum.Unstarted)
+    throw new Error("Game has already begun");
+
+  const gamePlayersKey = getGamePlayerMapKey(gameId);
+
+  const playerCount = await redis.hlen(gamePlayersKey);
+
+  if (playerCount == 5) {
+    throw new Error("Player limit reached. Cannot join the game.");
+  }
+
+  await redis.hset(gamePlayersKey, { [playerId]: 0 });
+  if (playerCount === 0) {
+    // Set the expiry when the first player joins
+    await redis.expire(gamePlayersKey, 60 * 60 * 24);
+  }
+
+  return true;
+};
+
+export const updatePlayerGameScore = async ({
+  gameId,
+  playerId,
+  score,
+}: {
+  gameId: string;
+  playerId: string;
+  score: number;
+}): Promise<boolean> => {
+  const redis = getRedis();
+  const board = await getGameByGameId(gameId);
+  if (!board) throw new Error("Game does not exist");
+  if (board.state !== GameStatusEnum.InProgress)
+    throw new Error("Game is not in progress");
+
+  await redis.hset(getGamePlayerMapKey(gameId), { [playerId]: score });
+  return true;
 };

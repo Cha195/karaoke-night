@@ -4,12 +4,27 @@ import {
   GameStatusEnum,
 } from "~/model/game";
 import { ServerResponseType } from "../models/api";
-import { gameBoardToGameBoardDTO, getGameByGameId } from "../service/game";
+import {
+  addGamePlayerMap,
+  gameBoardToGameBoardDTO,
+  getGameByGameId,
+} from "../service/game";
 
 export default defineEventHandler<
   Promise<ServerResponseType<GameBoardDTO | null>>
 >(async (event) => {
   try {
+    const playerId = getHeader(event, "player-id");
+
+    if (!playerId) {
+      return {
+        status: 400,
+        success: false,
+        message: "Player ID does not exist",
+        data: null,
+      };
+    }
+
     const query = getQuery(event);
 
     const parseResult = GetGameParamsSchema.safeParse(query);
@@ -43,6 +58,7 @@ export default defineEventHandler<
       };
     }
 
+    await addGamePlayerMap({ gameId: board.gameId, playerId });
     const gameBoardDTO = gameBoardToGameBoardDTO(board, crypto.randomUUID());
 
     return {

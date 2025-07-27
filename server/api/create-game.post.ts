@@ -1,11 +1,24 @@
 import { StartGameParamsSchema, GameBoardDTO } from "~/model/game";
 import { ServerResponseType } from "../models/api";
-import { gameBoardToGameBoardDTO, generateBoard } from "../service/game";
-import { getRedis } from "../service/redis";
+import {
+  addGamePlayerMap,
+  gameBoardToGameBoardDTO,
+  generateBoard,
+} from "../service/game";
 
 export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
   async (event) => {
     try {
+      const playerId = getHeader(event, "player-id");
+
+      if (!playerId) {
+        return {
+          status: 400,
+          success: false,
+          message: "Player ID does not exist",
+        };
+      }
+
       const { success, data, error } = await readValidatedBody(event, (body) =>
         StartGameParamsSchema.safeParse(body)
       );
@@ -20,6 +33,8 @@ export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
       }
 
       const board = await generateBoard(data);
+      await addGamePlayerMap({ gameId: board.gameId, playerId });
+
       const gameBoardDTO = gameBoardToGameBoardDTO(board, crypto.randomUUID());
 
       return {

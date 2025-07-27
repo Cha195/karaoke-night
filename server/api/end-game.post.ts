@@ -5,6 +5,16 @@ import { deleteGameByGameId } from "../service/game";
 export default defineEventHandler<Promise<ServerResponseType<void>>>(
   async (event) => {
     try {
+      const playerId = getHeader(event, "player-id");
+
+      if (!playerId) {
+        return {
+          status: 400,
+          success: false,
+          message: "Player ID does not exist",
+        };
+      }
+
       const query = getQuery(event);
 
       const parseResult = GetGameParamsSchema.safeParse(query);
