@@ -2,7 +2,7 @@ import { GetGameParamsSchema, GameBoardDTO } from "~/model/game";
 import { ServerResponseType } from "../models/api";
 import { startGameByGameId } from "../service/game";
 
-export default defineEventHandler<Promise<ServerResponseType<boolean>>>(
+export default defineEventHandler<Promise<ServerResponseType<void>>>(
   async (event) => {
     try {
       const playerId = getHeader(event, "player-id");
@@ -28,13 +28,12 @@ export default defineEventHandler<Promise<ServerResponseType<boolean>>>(
       }
 
       const { gameId } = parseResult.data;
-      const result = await startGameByGameId(gameId);
+      await startGameByGameId(gameId);
 
       return {
-        status: result ? 200 : 400,
-        success: result,
-        data: result,
-        message: "Player ID does not exist",
+        status: 200,
+        success: true,
+        message: "Successfully started the game",
       };
     } catch (err) {
       console.error(err);

@@ -83,9 +83,11 @@ export const getGameByGameId = async (
   return gameBoard;
 };
 
-export const startGameByGameId = async (gameId: string): Promise<boolean> => {
+export const startGameByGameId = async (gameId: string): Promise<void> => {
   const gameBoard = await getGameByGameId(gameId);
-  if (!gameBoard) return false;
+  if (!gameBoard) throw new Error("Game does not exist");
+  if (gameBoard.state !== GameStatusEnum.Unstarted)
+    throw new Error("Game state invalid");
 
   gameBoard.state = GameStatusEnum.InProgress;
   const redis = getRedis();
@@ -93,8 +95,6 @@ export const startGameByGameId = async (gameId: string): Promise<boolean> => {
   await redis.set(gameId, JSON.stringify(gameBoard), {
     ex: 60 * 60 * 24, // 1 day TTL
   });
-
-  return true;
 };
 
 export const deleteGameByGameId = async (gameId: string): Promise<void> => {

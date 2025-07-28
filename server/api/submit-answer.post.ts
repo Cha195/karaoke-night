@@ -41,14 +41,14 @@ export default defineEventHandler<
     return {
       status: 200,
       success: true,
-      message: "Successfully generated Game board",
+      message: "Successfully submitted answer",
       data: { board: gameBoardDTO, isCorrect },
     };
   } catch (err) {
     return {
       success: false,
       status: 500,
-      message: `Error while generating board.`,
+      message: `Error while submitting answer.`,
       error: err,
     };
   }
