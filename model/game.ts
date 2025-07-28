@@ -56,6 +56,7 @@ export const GameBoardDTOSchema = z.object({
   playerId: z.string().uuid(),
   tiles: z.array(GameTileDTOSchema),
   state: z.nativeEnum(GameStatusEnum),
+  playerScores: z.record(z.string(), z.number()),
 });
 
 export const AudioFeaturesSchema = z.object({

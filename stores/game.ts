@@ -123,10 +123,9 @@ export const useGameStore = defineStore("game", () => {
     clearError();
 
     try {
-      const response = await $fetch("/api/end-game", {
+      const response = await $fetch(`/api/end-game?gameId=${gameId}`, {
         method: "POST",
         headers: playerStore.getPlayerHeaders(),
-        body: { gameId },
       });
 
       if (response.success) {
@@ -152,7 +151,6 @@ export const useGameStore = defineStore("game", () => {
     gameId: string;
     tileId: string;
   }) => {
-    setLoading(true);
     clearError();
 
     try {
@@ -162,8 +160,9 @@ export const useGameStore = defineStore("game", () => {
         body: params,
       });
 
-      if (response.success) {
-        return { success: true, data: response.data };
+      if (response.success && response.data) {
+        setGameBoard(response.data.board);
+        return { success: true };
       } else {
         const errorMsg = response.message || "Failed to submit answer";
         setError(errorMsg);
@@ -173,8 +172,6 @@ export const useGameStore = defineStore("game", () => {
       const errorMsg = err.message || "Failed to submit answer";
       setError(errorMsg);
       return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
     }
   };
 

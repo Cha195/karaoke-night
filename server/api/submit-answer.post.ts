@@ -36,7 +36,7 @@ export default defineEventHandler<
       playerId,
     });
 
-    const gameBoardDTO = gameBoardToGameBoardDTO(board, playerId);
+    const gameBoardDTO = await gameBoardToGameBoardDTO(board, playerId);
 
     return {
       status: 200,

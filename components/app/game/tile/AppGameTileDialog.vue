@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useGameStore } from "~/stores/game";
+import { usePlayerStore } from "~/stores/player";
 import type { GameTileDTO } from "~/model/game";
 import AppMusicPlayer from "./AppMusicPlayer.vue";
 
@@ -13,6 +14,7 @@ const emit = defineEmits<{
 }>();
 
 const gameStore = useGameStore();
+const playerStore = usePlayerStore();
 
 // Get tile data from game store
 const tile = computed(() => {
@@ -26,6 +28,11 @@ const videoId = computed(() => {
   // Handle different YouTube URL formats
   return tile.value.previewUrl;
 });
+
+// Answer input
+const answerInput = ref("");
+const isSubmitting = ref(false);
+const submitError = ref("");
 
 // Music player ref
 const musicPlayer = ref();
@@ -43,12 +50,50 @@ const onPlayerError = (message: string) => {
   console.error("Music player error:", message);
 };
 
+// Submit answer
+const submitAnswer = async (event?: Event) => {
+  // Prevent form submission if called from form
+  if (event) {
+    event.preventDefault();
+  }
+
+  if (!answerInput.value.trim() || !gameStore.gameBoard) return;
+
+  isSubmitting.value = true;
+  submitError.value = "";
+
+  try {
+    const result = await gameStore.submitAnswer({
+      answer: answerInput.value.trim(),
+      gameId: gameStore.gameBoard.gameId,
+      tileId: props.id,
+    });
+
+    if (result.success) {
+      console.log("Answer submitted successfully");
+      // Clear input and close dialog
+      answerInput.value = "";
+      closeDialog();
+    } else {
+      submitError.value = result.error || "Failed to submit answer";
+    }
+  } catch (error) {
+    console.error("Error submitting answer:", error);
+    submitError.value = "Failed to submit answer";
+  } finally {
+    isSubmitting.value = false;
+  }
+};
+
 // Close dialog and cleanup
 const closeDialog = () => {
   // Stop music if playing
   if (musicPlayer.value) {
     musicPlayer.value.stopVideo();
   }
+  // Clear input and errors
+  answerInput.value = "";
+  submitError.value = "";
   emit("close");
 };
 
@@ -61,6 +106,18 @@ watch(
     }
   }
 );
+
+// Check if tile is already answered
+const isAnswered = computed(() => {
+  return (
+    tile.value?.answeredBy !== null && tile.value?.answeredBy !== undefined
+  );
+});
+
+// Check if current user answered this tile
+const isAnsweredByCurrentUser = computed(() => {
+  return tile.value?.answeredBy === playerStore.playerId;
+});
 </script>
 
 <template>
@@ -104,14 +161,14 @@ watch(
             <p class="text-sm text-gray-600">
               Difficulty: {{ tile.difficulty }}
             </p>
-            <p v-if="tile.answeredBy" class="text-sm text-green-600">
+            <p v-if="isAnswered" class="text-sm text-green-600">
               Answered by: {{ tile.answeredBy }}
             </p>
           </div>
         </div>
 
         <!-- Music Player -->
-        <div v-if="videoId" class="bg-blue-50 rounded-lg p-6">
+        <div v-if="videoId && !isAnswered" class="bg-blue-50 rounded-lg p-6">
           <h3 class="text-lg font-semibold text-blue-800 mb-4">
             Listen to Preview
           </h3>
@@ -126,8 +183,22 @@ watch(
           />
         </div>
 
+        <!-- Already Answered Message -->
+        <div v-if="isAnswered" class="bg-yellow-50 rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-yellow-800 mb-2">
+            {{
+              isAnsweredByCurrentUser
+                ? "You answered this tile!"
+                : "Already Answered"
+            }}
+          </h3>
+        </div>
+
         <!-- No Video Available -->
-        <div v-else class="bg-yellow-50 rounded-lg p-6">
+        <div
+          v-else-if="!videoId && !isAnswered"
+          class="bg-yellow-50 rounded-lg p-6"
+        >
           <h3 class="text-lg font-semibold text-yellow-800 mb-2">
             No Preview Available
           </h3>
@@ -136,10 +207,34 @@ watch(
           </p>
         </div>
 
+        <!-- Answer Input -->
+        <div v-if="!isAnswered" class="bg-green-50 rounded-lg p-4">
+          <h3 class="text-lg font-semibold text-green-800 mb-4">Your Answer</h3>
+          <div class="space-y-3">
+            <input
+              v-model="answerInput"
+              type="text"
+              placeholder="Enter song title and artist..."
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              :disabled="isSubmitting"
+              @keyup.enter="submitAnswer"
+            />
+            <p class="text-xs text-gray-600">Example: "Blinding Lights"</p>
+
+            <!-- Submit Error -->
+            <div
+              v-if="submitError"
+              class="mt-2 p-2 bg-red-100 border border-red-300 rounded text-red-700 text-sm"
+            >
+              {{ submitError }}
+            </div>
+          </div>
+        </div>
+
         <!-- Game Instructions -->
-        <div class="bg-green-50 rounded-lg p-4">
-          <h3 class="text-lg font-semibold text-green-800 mb-2">How to Play</h3>
-          <ul class="text-sm text-green-700 space-y-1">
+        <div v-if="!isAnswered" class="bg-blue-50 rounded-lg p-4">
+          <h3 class="text-lg font-semibold text-blue-800 mb-2">How to Play</h3>
+          <ul class="text-sm text-blue-700 space-y-1">
             <li>• Click "Play Song" to hear a 30-second preview</li>
             <li>• Try to guess the song title and artist</li>
             <li>• You can replay the preview multiple times</li>
@@ -150,15 +245,38 @@ watch(
         <!-- Action Buttons -->
         <div class="flex gap-3 pt-4">
           <button
-            @click="closeDialog"
+            @click.prevent="closeDialog"
             class="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
           >
             Close
           </button>
           <button
-            class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+            v-if="!isAnswered"
+            @click.prevent="submitAnswer"
+            :disabled="!answerInput.trim() || isSubmitting"
+            class="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
-            Submit Answer
+            <svg
+              v-if="isSubmitting"
+              class="animate-spin h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            {{ isSubmitting ? "Submitting..." : "Submit Answer" }}
           </button>
         </div>
       </div>

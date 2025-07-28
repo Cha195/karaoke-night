@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { useGameStore } from "~/stores/game";
 import { usePlayerStore } from "~/stores/player";
+import AppPlayerScores from "~/components/app/game/AppPlayerScores.vue";
 
 const route = useRoute();
 const gameId = route.query.gameId as string;
@@ -119,13 +120,21 @@ const closeDialog = () => {
         </p>
       </div>
 
+      <!-- Player Scores -->
+      <div class="mb-8 max-w-md mx-auto">
+        <AppPlayerScores :player-scores="gameStore.gameBoard.playerScores" />
+      </div>
+
       <!-- Game board grid -->
       <div class="grid grid-cols-5 gap-4 max-w-4xl mx-auto">
         <template v-for="tile in gameStore.gameBoard.tiles" :key="tile.tileId">
           <button
-            @click="clickHandler(tile.tileId)"
-            class="aspect-square bg-white/10 backdrop-blur-sm rounded-lg p-4 hover:bg-white/20 transition-all duration-200 transform hover:scale-105 border border-white/20"
-            :class="{ 'opacity-50': tile.answeredBy }"
+            @click="tile.answeredBy ? null : clickHandler(tile.tileId)"
+            class="aspect-square bg-white/10 backdrop-blur-sm rounded-lg p-4 transition-all duration-200 border border-white/20"
+            :class="{
+              'opacity-50 cursor-not-allowed': tile.answeredBy,
+              'hover:bg-white/20 hover:scale-105': !tile.answeredBy,
+            }"
           >
             <div
               class="h-full flex flex-col justify-center items-center text-center"

@@ -54,10 +54,22 @@ export const generateBoard = async (
   return board;
 };
 
-export const gameBoardToGameBoardDTO = (
+export const gameBoardToGameBoardDTO = async (
   board: GameBoard,
   playerId: string
-): GameBoardDTO => {
+): Promise<GameBoardDTO> => {
+  const redis = getRedis();
+  const gamePlayersKey = getGamePlayerMapKey(board.gameId);
+  const playerScores = await redis.hgetall(gamePlayersKey);
+
+  // Convert string values to numbers
+  const scores: Record<string, number> = {};
+  if (playerScores) {
+    for (const [key, value] of Object.entries(playerScores)) {
+      scores[key] = parseInt(value as string, 10);
+    }
+  }
+
   return {
     playerId,
     gameId: board.gameId,
@@ -69,6 +81,7 @@ export const gameBoardToGameBoardDTO = (
       previewUrl: tile.previewUrl,
       answeredBy: tile.answeredBy,
     })),
+    playerScores: scores,
   };
 };
 
