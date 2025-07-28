@@ -162,7 +162,7 @@ export const useGameStore = defineStore("game", () => {
 
       if (response.success && response.data) {
         setGameBoard(response.data.board);
-        return { success: true };
+        return { success: true, data: response.data };
       } else {
         const errorMsg = response.message || "Failed to submit answer";
         setError(errorMsg);

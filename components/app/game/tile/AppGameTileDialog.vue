@@ -3,6 +3,7 @@ import { useGameStore } from "~/stores/game";
 import { usePlayerStore } from "~/stores/player";
 import type { GameTileDTO } from "~/model/game";
 import AppMusicPlayer from "./AppMusicPlayer.vue";
+import confetti from "canvas-confetti";
 
 const props = defineProps<{
   id: string;
@@ -33,6 +34,9 @@ const videoId = computed(() => {
 const answerInput = ref("");
 const isSubmitting = ref(false);
 const submitError = ref("");
+const showAnswerFeedback = ref(false);
+const isAnswerCorrect = ref(false);
+const feedbackMessage = ref("");
 
 // Music player ref
 const musicPlayer = ref();
@@ -71,9 +75,36 @@ const submitAnswer = async (event?: Event) => {
 
     if (result.success) {
       console.log("Answer submitted successfully");
-      // Clear input and close dialog
-      answerInput.value = "";
-      closeDialog();
+      showAnswerFeedback.value = true;
+
+      console.log(result.data);
+
+      // Check if answer was correct
+      if (result.data?.isCorrect) {
+        // Correct answer - show confetti and success message
+        isAnswerCorrect.value = true;
+        feedbackMessage.value = "🎉 Correct! Great job!";
+
+        // Trigger confetti animation
+        triggerConfetti();
+
+        // Close dialog after 2 seconds
+        setTimeout(() => {
+          closeDialog();
+        }, 2000);
+      } else {
+        // Wrong answer - show error message
+        isAnswerCorrect.value = false;
+        feedbackMessage.value = "❌ Wrong answer";
+
+        // Trigger reverse confetti animation
+        triggerReverseConfetti();
+
+        // Close dialog after 2 seconds
+        setTimeout(() => {
+          closeDialog();
+        }, 2000);
+      }
     } else {
       submitError.value = result.error || "Failed to submit answer";
     }
@@ -94,6 +125,9 @@ const closeDialog = () => {
   // Clear input and errors
   answerInput.value = "";
   submitError.value = "";
+  showAnswerFeedback.value = false;
+  isAnswerCorrect.value = false;
+  feedbackMessage.value = "";
   emit("close");
 };
 
@@ -118,6 +152,27 @@ const isAnswered = computed(() => {
 const isAnsweredByCurrentUser = computed(() => {
   return tile.value?.answeredBy === playerStore.playerId;
 });
+
+// Confetti animation function
+const triggerConfetti = () => {
+  confetti({
+    particleCount: 100,
+    spread: 70,
+    origin: { y: 0.6 },
+  });
+};
+
+// Reverse confetti animation for wrong answers
+const triggerReverseConfetti = () => {
+  confetti({
+    particleCount: 100,
+    spread: 70,
+    gravity: -0.5,
+    startVelocity: 30,
+    scalar: 0.8,
+    origin: { y: 1 }, // start from bottom
+  });
+};
 </script>
 
 <template>
@@ -208,7 +263,10 @@ const isAnsweredByCurrentUser = computed(() => {
         </div>
 
         <!-- Answer Input -->
-        <div v-if="!isAnswered" class="bg-green-50 rounded-lg p-4">
+        <div
+          v-if="!isAnswered && !showAnswerFeedback"
+          class="bg-green-50 rounded-lg p-4"
+        >
           <h3 class="text-lg font-semibold text-green-800 mb-4">Your Answer</h3>
           <div class="space-y-3">
             <input
@@ -229,6 +287,39 @@ const isAnsweredByCurrentUser = computed(() => {
               {{ submitError }}
             </div>
           </div>
+        </div>
+
+        <!-- Answer Feedback -->
+        <div
+          v-if="showAnswerFeedback"
+          class="rounded-lg p-6 text-center"
+          :class="{
+            'bg-green-100 border border-green-300': isAnswerCorrect,
+            'bg-red-100 border border-red-300': !isAnswerCorrect,
+          }"
+        >
+          <div class="text-2xl mb-2">
+            {{ isAnswerCorrect ? "🎉" : "❌" }}
+          </div>
+          <h3
+            class="text-lg font-semibold mb-2"
+            :class="{
+              'text-green-800': isAnswerCorrect,
+              'text-red-800': !isAnswerCorrect,
+            }"
+          >
+            {{ isAnswerCorrect ? "Correct!" : "Wrong Answer" }}
+          </h3>
+          <p
+            class="text-sm"
+            :class="{
+              'text-green-700': isAnswerCorrect,
+              'text-red-700': !isAnswerCorrect,
+            }"
+          >
+            {{ feedbackMessage }}
+          </p>
+          <p class="text-xs text-gray-500 mt-2">Closing in 2 seconds...</p>
         </div>
 
         <!-- Game Instructions -->

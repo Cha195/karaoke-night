@@ -163,7 +163,7 @@ const matchAnswer = (userAnswer: string, correctTitle: string): boolean => {
 
   const result = fuzzysort.single(cleanUser, cleanCorrect);
 
-  return result !== null && result.score !== undefined && result.score > -50;
+  return result !== null && result.score !== undefined && result.score > 0.5;
 };
 
 export const submitAnswer = async ({
