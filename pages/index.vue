@@ -31,30 +31,7 @@ const canCreateGame = computed(() => {
 // Create game function
 const handleCreateGame = async () => {
   if (!canCreateGame.value) return;
-
-  const result = await gameStore.createGame({
-    artists: ["The Weeknd"],
-    limit: 25,
-  });
-
-  if (result.success) {
-    // Game created successfully, state is already updated
-    console.log("Game created:", result.data);
-  }
-  // Error handling is done in the store
-};
-
-// Start game function
-const handleStartGame = async () => {
-  if (!gameStore.gameBoard) return;
-
-  const result = await gameStore.startGame(gameStore.gameBoard.gameId);
-
-  if (result.success) {
-    // Navigate to game page
-    await navigateTo(`/game?gameId=${gameStore.gameBoard.gameId}`);
-  }
-  // Error handling is done in the store
+  await navigateTo("/game-prompt");
 };
 </script>
 
@@ -146,59 +123,6 @@ const handleStartGame = async () => {
           </span>
           <span v-else>🎮 Create New Game</span>
         </button>
-
-        <!-- Start Game Button -->
-        <button
-          v-if="gameStore.gameBoard"
-          @click="handleStartGame"
-          :disabled="gameStore.isLoading"
-          class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
-        >
-          <span
-            v-if="gameStore.isLoading"
-            class="flex items-center justify-center"
-          >
-            <svg
-              class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              ></circle>
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
-            Starting Game...
-          </span>
-          <span v-else>🚀 Start Game</span>
-        </button>
-
-        <!-- Game Info -->
-        <div v-if="gameStore.gameBoard" class="bg-white/5 rounded-lg p-4">
-          <p class="text-gray-300 text-sm">
-            Game ID:
-            <span class="font-mono text-xs">{{
-              gameStore.gameBoard.gameId
-            }}</span>
-          </p>
-          <p class="text-gray-300 text-sm">
-            Status:
-            <span class="text-yellow-400">{{ gameStore.gameBoard.state }}</span>
-          </p>
-          <p class="text-gray-300 text-sm">
-            Tiles: {{ gameStore.gameBoard.tiles.length }}
-          </p>
-        </div>
       </div>
     </div>
   </div>
