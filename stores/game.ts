@@ -1,54 +1,117 @@
 import { defineStore } from "pinia";
 import type { GameBoardDTO } from "~/model/game";
 import { usePlayerStore } from "./player";
+import type { WebSocketMessage } from "~/model/ws";
+import { WebSocketMessageType } from "~/model/ws";
 
 export const useGameStore = defineStore("game", () => {
-  // Use player store
   const playerStore = usePlayerStore();
 
-  // Game state
   const gameBoard = ref<GameBoardDTO | null>(null);
+  const playerNames = ref<Record<string, string>>({});
   const isLoading = ref(false);
   const error = ref<string>("");
+  const socket = ref<WebSocket | null>(null);
 
-  // Set game board (used after create-game API call)
+  const isCreator = computed(() => {
+    return playerStore.playerId === gameBoard.value?.creatorId;
+  });
+
   const setGameBoard = (board: GameBoardDTO) => {
-    console.log("setGameBoard called with:", board);
     gameBoard.value = board;
-    console.log("gameBoard.value after set:", gameBoard.value);
   };
 
-  // Clear game board (used when ending game)
   const clearGameBoard = () => {
     gameBoard.value = null;
+    playerNames.value = {};
   };
 
-  // Set loading state
-  const setLoading = (loading: boolean) => {
-    isLoading.value = loading;
+  const setPlayerName = (playerId: string, name: string) => {
+    playerNames.value[playerId] = name;
   };
 
-  // Set error
-  const setError = (err: string) => {
-    error.value = err;
+  const connectToGame = (gameId: string) => {
+    if (socket.value) return;
+    const playerId = playerStore.playerId;
+    if (!playerId) return;
+
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProtocol}//${window.location.host}/_ws`;
+
+    const newSocket = new WebSocket(wsUrl);
+
+    newSocket.onopen = () => {
+      console.log("[ws] Connected to WebSocket");
+      // Send join-game message after connection is established
+      newSocket.send(
+        JSON.stringify({
+          type: "join-game",
+          gameId,
+          playerId,
+        })
+      );
+    };
+
+    newSocket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as WebSocketMessage;
+        console.log("[ws] Received message:", message.type);
+
+        switch (message.type) {
+          case WebSocketMessageType.GameStarted:
+          case WebSocketMessageType.GameStateUpdate:
+            setGameBoard(message.payload);
+            break;
+          case WebSocketMessageType.PlayerJoined:
+            setPlayerName(message.payload.playerId, message.payload.playerName);
+            break;
+        }
+      } catch (err) {
+        console.error("[ws] Error parsing message:", err);
+      }
+    };
+
+    newSocket.onerror = (error) => {
+      console.error("[ws] WebSocket error:", error);
+    };
+
+    newSocket.onclose = () => {
+      console.log("[ws] WebSocket connection closed");
+      socket.value = null;
+    };
+
+    socket.value = newSocket;
   };
 
-  // Clear error
-  const clearError = () => {
-    error.value = "";
+  const disconnectFromGame = () => {
+    if (socket.value) {
+      socket.value.close();
+      socket.value = null;
+    }
   };
 
-  // Get current game ID
-  const getGameId = () => {
-    return gameBoard.value?.gameId || null;
+  const joinGame = async (gameId: string) => {
+    const playerName = playerStore.playerId;
+    if (!playerName) {
+      return { success: false, error: "Player name is not set." };
+    }
+
+    try {
+      const response = await $fetch("/api/join-game", {
+        method: "POST",
+        headers: playerStore.getPlayerHeaders(),
+        body: { gameId, playerName },
+      });
+      if (response.success && response.data) {
+        setGameBoard(response.data);
+        return { success: true, data: response.data };
+      }
+      return { success: false, error: response.message };
+    } catch (err: any) {
+      return { success: false, error: err.data?.message };
+    }
   };
 
-  // Check if user is in a game
-  const isInGame = () => {
-    return gameBoard.value !== null;
-  };
-
-  // Create game API call
   const createGame = async (params: {
     artists?: string[];
     genres?: string[];
@@ -56,141 +119,123 @@ export const useGameStore = defineStore("game", () => {
     moods?: string[];
     limit: number;
   }) => {
-    setLoading(true);
-    clearError();
-
+    isLoading.value = true;
+    error.value = "";
     try {
-      console.log("Creating game with params:", params);
-      console.log("Player headers:", playerStore.getPlayerHeaders());
-
       const response = await $fetch("/api/create-game", {
         method: "POST",
         headers: playerStore.getPlayerHeaders(),
         body: params,
       });
-
-      console.log("Create game response:", response);
-
       if (response.success && response.data) {
-        console.log("Setting game board:", response.data);
         setGameBoard(response.data);
         return { success: true, data: response.data };
       } else {
         const errorMsg = response.message || "Failed to create game";
-        setError(errorMsg);
+        error.value = errorMsg;
         return { success: false, error: errorMsg };
       }
     } catch (err: any) {
-      const errorMsg = err.message || "Failed to create game";
-      setError(errorMsg);
+      const errorMsg =
+        err.data?.message || err.message || "Failed to create game";
+      error.value = errorMsg;
       return { success: false, error: errorMsg };
     } finally {
-      setLoading(false);
+      isLoading.value = false;
     }
   };
 
-  // Start game API call
   const startGame = async (gameId: string) => {
-    setLoading(true);
-    clearError();
-
+    isLoading.value = true;
+    error.value = "";
     try {
       const response = await $fetch("/api/start-game", {
         method: "POST",
         headers: playerStore.getPlayerHeaders(),
         query: { gameId },
       });
-
-      if (response.success) {
-        return { success: true };
+      if (response.success && response.data) {
+        return { success: true, data: response.data };
       } else {
         const errorMsg = response.message || "Failed to start game";
-        setError(errorMsg);
+        error.value = errorMsg;
         return { success: false, error: errorMsg };
       }
     } catch (err: any) {
-      const errorMsg = err.message || "Failed to start game";
-      setError(errorMsg);
+      const errorMsg =
+        err.data?.message || err.message || "Failed to start game";
+      error.value = errorMsg;
       return { success: false, error: errorMsg };
     } finally {
-      setLoading(false);
+      isLoading.value = false;
     }
   };
 
-  // End game API call
   const endGame = async (gameId: string) => {
-    setLoading(true);
-    clearError();
-
+    isLoading.value = true;
+    error.value = "";
     try {
       const response = await $fetch(`/api/end-game?gameId=${gameId}`, {
         method: "POST",
         headers: playerStore.getPlayerHeaders(),
       });
-
       if (response.success) {
         clearGameBoard();
+        disconnectFromGame();
         return { success: true };
       } else {
         const errorMsg = response.message || "Failed to end game";
-        setError(errorMsg);
+        error.value = errorMsg;
         return { success: false, error: errorMsg };
       }
     } catch (err: any) {
-      const errorMsg = err.message || "Failed to end game";
-      setError(errorMsg);
+      const errorMsg = err.data?.message || err.message || "Failed to end game";
+      error.value = errorMsg;
       return { success: false, error: errorMsg };
     } finally {
-      setLoading(false);
+      isLoading.value = false;
     }
   };
 
-  // Submit answer API call
   const submitAnswer = async (params: {
     answer: string;
     gameId: string;
     tileId: string;
   }) => {
-    clearError();
-
+    error.value = "";
     try {
       const response = await $fetch("/api/submit-answer", {
         method: "POST",
         headers: playerStore.getPlayerHeaders(),
         body: params,
       });
-
       if (response.success && response.data) {
-        setGameBoard(response.data.board);
         return { success: true, data: response.data };
       } else {
         const errorMsg = response.message || "Failed to submit answer";
-        setError(errorMsg);
+        error.value = errorMsg;
         return { success: false, error: errorMsg };
       }
     } catch (err: any) {
-      const errorMsg = err.message || "Failed to submit answer";
-      setError(errorMsg);
+      const errorMsg =
+        err.data?.message || err.message || "Failed to submit answer";
+      error.value = errorMsg;
       return { success: false, error: errorMsg };
     }
   };
 
   return {
-    // State
     gameBoard,
+    playerNames,
     isLoading,
     error,
-
-    // Game actions
+    isCreator,
     setGameBoard,
     clearGameBoard,
-    setLoading,
-    setError,
-    clearError,
-    getGameId,
-    isInGame,
-
-    // API actions
+    setPlayerName,
+    connectToGame,
+    disconnectFromGame,
+    joinGame,
     createGame,
     startGame,
     endGame,

@@ -1,6 +1,8 @@
 import { GameBoardDTO, SubmitAnswerParamsSchema } from "~/model/game";
 import { ServerResponseType } from "../models/api";
 import { gameBoardToGameBoardDTO, submitAnswer } from "../service/game";
+import { WebSocketMessageType } from "~/model/ws"; // Import the broadcast function
+import { broadcastToGame } from "../routes/_ws";
 
 export default defineEventHandler<
   Promise<ServerResponseType<{ board: GameBoardDTO; isCorrect: boolean }>>
@@ -38,6 +40,12 @@ export default defineEventHandler<
 
     const gameBoardDTO = await gameBoardToGameBoardDTO(board, playerId);
 
+    // Broadcast the updated game state to all clients in the room
+    broadcastToGame(data.gameId, {
+      type: WebSocketMessageType.GameStateUpdate,
+      payload: gameBoardDTO,
+    });
+
     return {
       status: 200,
       success: true,
@@ -45,10 +53,13 @@ export default defineEventHandler<
       data: { board: gameBoardDTO, isCorrect },
     };
   } catch (err) {
+    // It's good practice to handle potential errors from your services
+    const errorMessage =
+      err instanceof Error ? err.message : "An unknown error occurred.";
     return {
       success: false,
       status: 500,
-      message: `Error while submitting answer.`,
+      message: `Error while submitting answer: ${errorMessage}`,
       error: err,
     };
   }

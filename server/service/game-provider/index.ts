@@ -13,15 +13,16 @@ export function queryGenerator(params: StartGameParams): string {
 
   if (params.artists && params.artists.length > 0) {
     // Spotify: artist:"Artist1" OR artist:"Artist2"
+
     queryParts.push(
-      params.artists.map((artist: string) => `artist:"${artist}"`).join(" ")
+      params.artists.map((artist: string) => `artist:${artist}`).join(" ")
     );
   }
 
   if (params.genres && params.genres.length > 0) {
     // Spotify: genre:"Genre1" OR genre:"Genre2"
     queryParts.push(
-      params.genres.map((genre: string) => `genre:"${genre}"`).join(" ")
+      params.genres.map((genre: string) => `genre:${genre}`).join(" ")
     );
   }
 

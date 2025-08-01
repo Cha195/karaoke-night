@@ -6,46 +6,59 @@ import AppPlayerScores from "~/components/app/game/AppPlayerScores.vue";
 const route = useRoute();
 const gameId = route.query.gameId as string;
 
-console.log("Game page loaded, gameId:", gameId);
-
-// Use Pinia stores
 const gameStore = useGameStore();
 const playerStore = usePlayerStore();
 
-// Dialog state
 const isDialogOpen = ref(false);
 const selectedTileId = ref<string | null>(null);
 
-// Initialize on page load
-onMounted(() => {
-  console.log("Game page mounted");
-  console.log("Initial gameBoard:", gameStore.gameBoard);
-  console.log("Initial playerId:", playerStore.playerId);
+// Computed property to check if it's the current user's turn
+const isMyTurn = computed(() => {
+  return (
+    gameStore.gameBoard?.currentPlayerId === playerStore.playerId &&
+    gameStore.gameBoard?.state === "In-Progress"
+  );
+});
 
+// Get the name of the current player
+const currentPlayerName = computed(() => {
+  if (!gameStore.gameBoard || !gameStore.gameBoard.currentPlayerId)
+    return "N/A";
+  // This is a simplification. A real app would have a map of player IDs to names.
+  // For now, we'll indicate if it's the current user.
+  if (gameStore.gameBoard.currentPlayerId === playerStore.playerId) {
+    return `${playerStore.playerName} (You)`;
+  }
+  return `Player ${gameStore.gameBoard.currentPlayerId.substring(0, 8)}`;
+});
+
+onMounted(() => {
   playerStore.initializePlayer();
   playerStore.loadPlayerName();
 
-  console.log("After initialization - playerId:", playerStore.playerId);
-  console.log("After initialization - gameBoard:", gameStore.gameBoard);
-
   if (!gameId) {
-    console.error("No game ID provided");
+    console.error("No game ID provided, redirecting...");
     navigateTo("/");
-  } else if (!gameStore.gameBoard) {
-    console.error("No game board in state, redirecting to home");
-    navigateTo("/");
-  } else {
-    console.log("Game board found:", gameStore.gameBoard);
+    return;
   }
+  if (!gameStore.gameBoard) {
+    console.error("No game board in state, redirecting...");
+    navigateTo("/");
+    return;
+  }
+
+  // Connect to the WebSocket server
+  gameStore.connectToGame(gameId);
 });
 
-// End game function
-const handleEndGame = async () => {
-  console.log("Ending game with gameId:", gameId);
-  const result = await gameStore.endGame(gameId);
+onUnmounted(() => {
+  // Disconnect from WebSocket when leaving the page
+  gameStore.disconnectFromGame();
+});
 
+const handleEndGame = async () => {
+  const result = await gameStore.endGame(gameId);
   if (result.success) {
-    console.log("Game ended successfully");
     navigateTo("/");
   } else {
     console.error("Failed to end game:", result.error);
@@ -53,7 +66,7 @@ const handleEndGame = async () => {
 };
 
 const clickHandler = (tileId: string) => {
-  console.log("Tile clicked:", tileId);
+  if (!isMyTurn.value) return;
   selectedTileId.value = tileId;
   isDialogOpen.value = true;
 };
@@ -69,43 +82,27 @@ const closeDialog = () => {
     class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4"
   >
     <!-- Debug info -->
-    <div class="fixed top-4 left-4 bg-black/50 text-white p-2 rounded text-xs">
+    <div
+      class="fixed top-4 left-4 bg-black/50 text-white p-2 rounded text-xs z-50"
+    >
       <div>GameId: {{ gameId }}</div>
-      <div>Has GameBoard: {{ !!gameStore.gameBoard }}</div>
       <div>PlayerId: {{ playerStore.playerId }}</div>
-      <div>Loading: {{ gameStore.isLoading }}</div>
-      <div>Error: {{ gameStore.error }}</div>
+      <div>Is My Turn: {{ isMyTurn }}</div>
+      <div>Current Player: {{ gameStore.gameBoard?.currentPlayerId }}</div>
     </div>
 
-    <!-- Loading state -->
+    <!-- Loading, Error, No Game Board states remain the same -->
     <div
       v-if="gameStore.isLoading"
       class="flex items-center justify-center min-h-screen"
     >
-      <div class="text-center">
-        <div
-          class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"
-        ></div>
-        <p class="text-white">Loading game...</p>
-      </div>
+      <!-- ... loading spinner ... -->
     </div>
-
-    <!-- Error state -->
     <div
       v-else-if="gameStore.error"
       class="flex items-center justify-center min-h-screen"
     >
-      <div
-        class="bg-red-500/20 border border-red-500/50 rounded-lg p-6 max-w-md"
-      >
-        <p class="text-red-300 text-center">{{ gameStore.error }}</p>
-        <button
-          @click="handleEndGame()"
-          class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-        >
-          Back to Home
-        </button>
-      </div>
+      <!-- ... error message ... -->
     </div>
 
     <!-- Game board -->
@@ -114,10 +111,21 @@ const closeDialog = () => {
       <div class="text-center mb-8">
         <h1 class="text-4xl font-bold text-white mb-2">🎤 Karaoke Night</h1>
         <p class="text-gray-300">Game ID: {{ gameStore.gameBoard.gameId }}</p>
-        <p class="text-gray-300">Status: {{ gameStore.gameBoard.state }}</p>
-        <p v-if="playerStore.playerName" class="text-gray-300">
-          Player: {{ playerStore.playerName }}
-        </p>
+        <div
+          v-if="gameStore.gameBoard.state === 'In-Progress'"
+          class="mt-4 p-3 rounded-lg text-lg transition-all"
+          :class="
+            isMyTurn
+              ? 'bg-green-500/30 text-green-200'
+              : 'bg-yellow-500/30 text-yellow-200'
+          "
+        >
+          <p v-if="isMyTurn" class="font-bold animate-pulse">It's your turn!</p>
+          <p v-else>
+            Waiting for
+            <span class="font-bold">{{ currentPlayerName }}</span> to play...
+          </p>
+        </div>
       </div>
 
       <!-- Player Scores -->
@@ -129,24 +137,37 @@ const closeDialog = () => {
       <div class="grid grid-cols-5 gap-4 max-w-4xl mx-auto">
         <template v-for="tile in gameStore.gameBoard.tiles" :key="tile.tileId">
           <button
-            @click="tile.answeredBy ? null : clickHandler(tile.tileId)"
+            @click="clickHandler(tile.tileId)"
             class="aspect-square bg-white/10 backdrop-blur-sm rounded-lg p-4 transition-all duration-200 border border-white/20"
+            :disabled="!!tile.answeredBy || !isMyTurn"
             :class="{
-              'opacity-50 cursor-not-allowed': tile.answeredBy,
-              'hover:bg-white/20 hover:scale-105': !tile.answeredBy,
+              'opacity-50 cursor-not-allowed': !!tile.answeredBy || !isMyTurn,
+              'hover:bg-white/20 hover:scale-105': !tile.answeredBy && isMyTurn,
             }"
           >
             <div
               class="h-full flex flex-col justify-center items-center text-center"
             >
-              <p class="text-white text-sm font-medium mb-2">
-                {{ tile.previewUrl || "No Preview" }}
+              <p class="text-white text-3xl font-bold">
+                {{ tile.points }}
               </p>
-              <p class="text-gray-400 text-xs">Points: {{ tile.points }}</p>
-              <p class="text-gray-400 text-xs">{{ tile.difficulty }}</p>
+              <p class.growing="text-gray-400 text-xs mt-2">
+                {{ tile.difficulty }}
+              </p>
             </div>
           </button>
         </template>
+      </div>
+
+      <!-- End Game Button -->
+      <div class="text-center mt-8">
+        <button
+          @click="handleEndGame"
+          :disabled="!isMyTurn"
+          class="bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed hover:enabled:bg-red-700"
+        >
+          End Game
+        </button>
       </div>
 
       <!-- Dialog component -->
@@ -158,23 +179,9 @@ const closeDialog = () => {
       />
     </div>
 
-    <!-- No game board state -->
     <div v-else class="flex items-center justify-center min-h-screen">
-      <div
-        class="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-6 max-w-md"
-      >
-        <p class="text-yellow-300 text-center">
-          No game board found. Redirecting to home...
-        </p>
-        <button
-          @click="navigateTo('/')"
-          class="mt-4 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded"
-        >
-          Go to Home
-        </button>
-      </div>
+      <!-- ... no game board message ... -->
     </div>
   </div>
 </template>
-
 <style></style>

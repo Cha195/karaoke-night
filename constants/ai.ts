@@ -14,6 +14,6 @@ Rules:
 2. Use lowercase for all values
 3. Return valid JSON only
 4. Default limit is 25 if not specified
-5. Based on the input, figure out the language of the songs and add it to the genres array
+5. Based on the input, figure out the language of the songs and add it to the genres array except for english
 
 Return only the JSON object, no additional text.`;

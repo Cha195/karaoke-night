@@ -1,13 +1,16 @@
 import { GetGameParamsSchema, GameBoardDTO } from "~/model/game";
 import { ServerResponseType } from "../models/api";
-import { startGameByGameId } from "../service/game";
+import { startGameByGameId, gameBoardToGameBoardDTO } from "../service/game";
+import { WebSocketMessageType } from "~/model/ws";
+import { broadcastToGame } from "../routes/_ws";
 
-export default defineEventHandler<Promise<ServerResponseType<void>>>(
+export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
   async (event) => {
     try {
       const playerId = getHeader(event, "player-id");
+      const playerName = getHeader(event, "player-name");
 
-      if (!playerId) {
+      if (!playerId || !playerName) {
         return {
           status: 400,
           success: false,
@@ -28,19 +31,37 @@ export default defineEventHandler<Promise<ServerResponseType<void>>>(
       }
 
       const { gameId } = parseResult.data;
-      await startGameByGameId(gameId);
+      const startedBoard = await startGameByGameId(gameId, playerId);
+
+      if (!startedBoard) {
+        throw new Error("Failed to get board state after starting game.");
+      }
+
+      const gameBoardDTO = await gameBoardToGameBoardDTO(
+        startedBoard,
+        playerId
+      );
+
+      // Broadcast the initial state to all players
+      broadcastToGame(gameId, {
+        type: WebSocketMessageType.GameStateUpdate,
+        payload: gameBoardDTO,
+      });
 
       return {
         status: 200,
         success: true,
         message: "Successfully started the game",
+        data: gameBoardDTO,
       };
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      const errorMessage =
+        err instanceof Error ? err.message : "An unknown error occurred.";
       return {
         status: 400,
         success: false,
-        message: "Error starting game",
+        message: `Error starting game: ${errorMessage}`,
         error: err,
       };
     }

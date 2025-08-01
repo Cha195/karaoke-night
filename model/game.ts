@@ -47,16 +47,19 @@ export const GameTileSchema = GameTileDTOSchema.extend({
 
 export const GameBoardSchema = z.object({
   gameId: z.string().uuidv4(),
+  creatorId: z.string().uuid(),
   tiles: z.array(GameTileSchema),
   state: z.nativeEnum(GameStatusEnum),
 });
 
 export const GameBoardDTOSchema = z.object({
   gameId: z.string().uuid(),
+  creatorId: z.string().uuid(),
   playerId: z.string().uuid(),
   tiles: z.array(GameTileDTOSchema),
   state: z.nativeEnum(GameStatusEnum),
   playerScores: z.record(z.string(), z.number()),
+  currentPlayerId: z.string().uuid().nullable(),
 });
 
 export const AudioFeaturesSchema = z.object({

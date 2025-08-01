@@ -10,8 +10,9 @@ export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
   async (event) => {
     try {
       const playerId = getHeader(event, "player-id");
+      const playerName = getHeader(event, "player-name");
 
-      if (!playerId) {
+      if (!playerId || !playerName) {
         return {
           status: 400,
           success: false,
@@ -32,8 +33,7 @@ export default defineEventHandler<Promise<ServerResponseType<GameBoardDTO>>>(
         };
       }
 
-      const board = await generateBoard(data);
-      await addGamePlayerMap({ gameId: board.gameId, playerId });
+      const board = await generateBoard(data, playerId, playerName);
 
       const gameBoardDTO = await gameBoardToGameBoardDTO(board, playerId);
 

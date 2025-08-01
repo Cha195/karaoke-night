@@ -17,4 +17,9 @@ export default defineNuxtConfig({
   experimental: {
     viewTransition: true,
   },
+  nitro: {
+    experimental: {
+      websocket: true,
+    },
+  },
 });
